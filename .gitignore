@@ -1,0 +1,9 @@
+go.owl
+go.obo
+goa_human.gaf
+go-basic.obo
+data_tisch/
+data_tisch2/
+data_RNA-seq/
+notebooks/*.pth
+notebooks/*.csv
