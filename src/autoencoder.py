@@ -25,8 +25,10 @@ class MaskedLinear(nn.Module):
         return(self.activation(prod))
 
 class GeneAutoEncoder(nn.Module):
-    def __init__(self, n_genes, n_dense, mask, activation='tanh'):
+    def __init__(self, n_genes, n_dense, mask, all_genes, all_go, activation='tanh'):
         super().__init__()
+        self.all_genes = all_genes
+        self.all_go = all_go
         
         self.mask = mask
         self.mask_t = torch.transpose(mask, 1, 0)
@@ -45,10 +47,22 @@ class GeneAutoEncoder(nn.Module):
         decoded = self.decoder(encoded)
         
         return(decoded)
-
+    
+    def get_terms(self, gene_id):
+        term_idx = torch.non_zeros(self.mask[gene_id, :], as_tuple=True)[0]
+        
+        return(all_go[term_idx])
+        
+    def get_gene(self, term_id):
+        gene_idx = torch.non_zeros(self.mask[:, term_id], as_tuple=True)[0]
+        
+        return(all_genes[gene_idx])
+    
 class GeneClassifier(nn.Module):
-    def __init__(self, n_genes, n_dense, mask, n_classes, activation='tanh'):
+    def __init__(self, n_genes, n_dense, mask, n_classes, all_genes, all_go, activation='tanh'):
         super().__init__()
+        self.all_genes = all_genes
+        self.all_go = all_go
         
         self.mask = mask
         self.mask_t = torch.transpose(mask, 1, 0)
@@ -68,6 +82,16 @@ class GeneClassifier(nn.Module):
         res = self.clf(encoded)
         
         return(res)
+    
+    def get_terms(self, gene_id):
+        term_idx = torch.non_zeros(self.mask[gene_id, :], as_tuple=True)[0]
+        
+        return(all_go[term_idx])
+        
+    def get_gene(self, term_id):
+        gene_idx = torch.non_zeros(self.mask[:, term_id], as_tuple=True)[0]
+        
+        return(all_genes[gene_idx])
 
 @timeit
 def ae_pipeline(mask, data_numpy, n_epochs=10, batch_size=50, print_loss=100, output_file='model.pth', embed_file='embeddings_ae.csv'):
@@ -213,3 +237,5 @@ def min_max_normalisation(matrix, a=-1, b=1, e=1e-8):
     m = np.min(matrix, axis=0)
     r = (b-a) * (matrix-m) / (M-m+e) + a
     return(r)
+
+def 
