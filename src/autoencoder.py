@@ -5,6 +5,7 @@ from torchsummary import summary
 import numpy as np
 
 from utils import timeit
+from operator import itemgetter
 
 class MaskedLinear(nn.Module):
     def __init__(self, n_input, n_output, mask, has_bias=False, activation='identity'):
@@ -49,14 +50,36 @@ class GeneAutoEncoder(nn.Module):
         return(decoded)
     
     def get_terms(self, gene_id):
-        term_idx = torch.non_zeros(self.mask[gene_id, :], as_tuple=True)[0]
+        term_idx = torch.nonzero(self.mask[gene_id, :], as_tuple=True)[0]
         
-        return(all_go[term_idx])
+        res = [self.all_go[t] for t in term_idx]
         
-    def get_gene(self, term_id):
-        gene_idx = torch.non_zeros(self.mask[:, term_id], as_tuple=True)[0]
+        return(res)
         
-        return(all_genes[gene_idx])
+    def get_genes(self, term_id):
+        gene_idx = torch.nonzero(self.mask[:, term_id], as_tuple=True)[0]
+        
+        res = [self.all_genes[g] for g in gene_idx]
+        
+        return(res)
+    
+    def get_sorted_genes(self, term_id):
+        gene_idx = torch.nonzero(self.mask[:, term_id], as_tuple=True)[0]
+        
+        W = self.encoder[0].W.detach()
+
+        res = [(self.all_genes[g], W[g, term_id].item()) for g in gene_idx]
+        
+        return(sorted(res, key=itemgetter(1), reverse=True))
+    
+    def get_sorted_terms(self, gene_id):
+        term_idx = torch.nonzero(self.mask[gene_id, :], as_tuple=True)[0]
+        
+        W = self.encoder[0].W.detach()
+                
+        res = [(self.all_go[t], W[gene_id, t].item()) for t in term_idx]
+        
+        return(sorted(res, key=itemgetter(1), reverse=True))
     
 class GeneClassifier(nn.Module):
     def __init__(self, n_genes, n_dense, mask, n_classes, all_genes, all_go, activation='tanh'):
@@ -84,20 +107,43 @@ class GeneClassifier(nn.Module):
         return(res)
     
     def get_terms(self, gene_id):
-        term_idx = torch.non_zeros(self.mask[gene_id, :], as_tuple=True)[0]
+        term_idx = torch.nonzero(self.mask[gene_id, :], as_tuple=True)[0]
         
-        return(all_go[term_idx])
+        res = [self.all_go[t] for t in term_idx]
         
-    def get_gene(self, term_id):
-        gene_idx = torch.non_zeros(self.mask[:, term_id], as_tuple=True)[0]
+        return(res)
+    
+    def get_genes(self, term_id):
+        gene_idx = torch.nonzero(self.mask[:, term_id], as_tuple=True)[0]
         
-        return(all_genes[gene_idx])
+        res = [self.all_genes[g] for g in gene_idx]
+        
+        return(res)
+    
+    def get_sorted_genes(self, term_id):
+        gene_idx = torch.nonzero(self.mask[:, term_id], as_tuple=True)[0]
+        
+        W = self.encoder[0].W.detach()
+
+        res = [(self.all_genes[g], W[g, term_id].item()) for g in gene_idx]
+        
+        return(sorted(res, key=itemgetter(1), reverse=True))
+    
+    def get_sorted_terms(self, gene_id):
+        term_idx = torch.nonzero(self.mask[gene_id, :], as_tuple=True)[0]
+        
+        W = self.encoder[0].W.detach()
+                
+        res = [(self.all_go[t], W[gene_id, t].item()) for t in term_idx]
+        
+        return(sorted(res, key=itemgetter(1), reverse=True))
+
 
 @timeit
-def ae_pipeline(mask, data_numpy, n_epochs=10, batch_size=50, print_loss=100, output_file='model.pth', embed_file='embeddings_ae.csv'):
+def ae_pipeline(mask, data_numpy, all_genes, all_go, n_epochs=10, batch_size=50, print_loss=100, output_file='model.pth', embed_file='embeddings_ae.csv'):
     N_genes = data_numpy.shape[1]
     
-    ae = GeneAutoEncoder(N_genes, 500, mask, activation='tanh')
+    ae = GeneAutoEncoder(N_genes, 500, mask, all_genes, all_go, activation='tanh')
     summary(ae, (1,N_genes))
     
     N = data_numpy.shape[0]
@@ -236,6 +282,4 @@ def min_max_normalisation(matrix, a=-1, b=1, e=1e-8):
     M = np.max(matrix, axis=0)
     m = np.min(matrix, axis=0)
     r = (b-a) * (matrix-m) / (M-m+e) + a
-    return(r)
-
-def 
+    return(r) 

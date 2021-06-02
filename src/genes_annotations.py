@@ -1,5 +1,5 @@
 from goatools.anno.gaf_reader import GafReader
-from goatools.obo_parser import OBOReader, GODag
+from goatools.obo_parser import  GODag
 import torch
 
 import numpy as np
@@ -56,6 +56,14 @@ def get_all_gene_annotations(h5):
     all_genes = sorted(list(all_genes))
 
     return (genes_go, all_go, all_genes)
+
+class GOTerm:
+    def __init__(self):
+        self.ogaf = GafReader("../goa_human.gaf")
+        self.godag = GODag("../go.obo", optional_attrs={'consider', 'replaced_by'}, load_obsolete=True)
+     
+    def get_go_name(self, go_id):
+        return(self.godag[go_id].name)
 
 def build_mask(h5, genes_go, all_go, all_genes):
     genes_to_index = {k:v for v,k in enumerate(all_genes)}
