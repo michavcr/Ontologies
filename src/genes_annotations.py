@@ -21,20 +21,19 @@ def get_all_genes(h5):
      
     return(s)
 
-def select_terms(godag, namespaces, level, take_obsolete):
+def select_terms(godag, namespaces, levels, take_obsolete):
     selected = {}
     
     for k, term in godag.items():
-        if term.level == level and (take_obsolete or not term.is_obsolete) and term.namespace in namespaces:
+        if term.level in levels and (take_obsolete or not term.is_obsolete) and term.namespace in namespaces:
             selected[k]=term
     
     return(selected)
 
-def get_all_gene_annotations(h5):
-    ogaf = GafReader("../goa_human.gaf")
-    godag = GODag("../go.obo", optional_attrs={'consider', 'replaced_by'}, load_obsolete=True)
+def get_all_gene_annotations(h5, levels=[3], kinds=['biological_process', 'molecular_function']):
+    goterm = GOTerm()
     
-    selected_terms = select_terms(godag, ['biological_process', 'molecular_function'], 3, False)
+    selected_terms = select_terms(goterm.godag, kinds, levels, False)
     
     genes = get_all_genes(h5)
 
@@ -42,7 +41,7 @@ def get_all_gene_annotations(h5):
     all_go = set()
     all_genes = set()
 
-    for a in ogaf.get_associations():
+    for a in goterm.ogaf.get_associations():
         if a.DB_Symbol in genes and a.GO_ID in selected_terms.keys():
             if a.DB_Symbol not in genes_go:
                 genes_go[a.DB_Symbol] = {a.GO_ID}
@@ -55,7 +54,13 @@ def get_all_gene_annotations(h5):
     all_go = sorted(list(all_go))
     all_genes = sorted(list(all_genes))
 
-    return (genes_go, all_go, all_genes)
+    return (goterm, genes_go, all_go, all_genes)
+
+##TODO : faire une fonction pour retrouver le nom du type de cellule
+# reentrainer sans les molécular functions et avec niveau 4 ou 5
+#* existe il des outils pour visualiser les poids des réseaux de neurones ?
+##* demander à fabien ou yufei un jeu de données qu'ils connaissent bien
+#* mettre le dernier code pour afficher les n plus grands termes dans une fonction
 
 class GOTerm:
     def __init__(self):
@@ -64,6 +69,17 @@ class GOTerm:
      
     def get_go_name(self, go_id):
         return(self.godag[go_id].name)
+
+def largest_terms(df, cell, goterm, all_go, n=10):
+    ix = df[0].nlargest(10).index
+    t = [all_go[i] for i in ix]
+    
+    res=[]
+    
+    for p in t:
+        res.append(goterm.get_go_name(p))
+    
+    return(res)
 
 def build_mask(h5, genes_go, all_go, all_genes):
     genes_to_index = {k:v for v,k in enumerate(all_genes)}
