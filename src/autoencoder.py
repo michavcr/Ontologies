@@ -49,6 +49,18 @@ class MaskedLinear(nn.Module):
         self.mean_W = self.W.detach()
         
         return(self.mean_W, self.var_W)
+    
+    def get_VIANN(self):
+        W = self.W.detach()
+        VIANN = torch.sum(abs(W*self.var_W), dim=1)
+        
+        return(VIANN)
+    
+    def get_VTANN(self):
+        W = self.W.detach()
+        VIANN = torch.sum(abs(W*self.var_W), dim=0)
+        
+        return(VIANN)
         
 class GeneAutoEncoder(nn.Module):
     def __init__(self, n_genes, n_dense, mask, all_genes, all_go, activation='tanh'):
@@ -297,6 +309,7 @@ def clf_pipeline(mask, data_numpy, targets, all_genes, all_go, n_epochs=10, batc
     criterion = nn.CrossEntropyLoss()
     
     _,_ = clf.initialize_score_variance()
+    _,_ = clf.encoder[0].initialize_weight_variance()
     
     for epoch in range(n_epochs):  # loop over the dataset multiple times
 
@@ -305,6 +318,7 @@ def clf_pipeline(mask, data_numpy, targets, all_genes, all_go, n_epochs=10, batc
         total = 0 
         
         _,_ = clf.update_score_variance(epoch+1)
+        _,_ = clf.encoder[0].update_weight_variance(epoch+1)
         
         for i, data in enumerate(train_loader, 0):
             # get the inputs; data is a list of [inputs, labels]
