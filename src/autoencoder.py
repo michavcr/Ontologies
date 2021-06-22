@@ -138,13 +138,18 @@ class Baseline(nn.Module):
         return(decoded)
         
 class GeneClassifier(nn.Module):
-    def __init__(self, n_genes, n_dense, mask, n_classes, all_genes, all_go, activation='tanh'):
+    def __init__(self, n_genes, n_dense, mask, n_classes, all_genes, all_go, activation='tanh', dense=False):
         super().__init__()
         self.all_genes = all_genes
         self.all_go = all_go
         
         self.N0 = mask.size()[0]
-        self.mask = torch.cat((mask, torch.ones(self.N0, n_dense)), dim=1)
+        
+        if dense:
+            self.mask = torch.cat((mask, torch.ones(self.N0, n_dense)), dim=1)
+        else:
+            self.mask = mask
+            
         self.mask_t = torch.transpose(self.mask, 1, 0)
         
         self.N1 = self.mask.size()[1]
@@ -223,6 +228,18 @@ class GeneClassifier(nn.Module):
         
         return(self.mean_S, self.var_S)
 
+class PartialClassifier(nn.Module):
+    def __init__(self, clf):
+        super().__init__()
+
+        self.clf = clf
+    
+    def forward(self, features):
+        encoded = self.clf.encoder[1:](features)
+        res = self.clf.clf(encoded)
+        
+        return(res)
+    
 @timeit
 def ae_pipeline(mask, data_numpy, all_genes, all_go, n_epochs=10, batch_size=50, print_loss=100, output_file='model.pth', embed_file='embeddings_ae.csv'):
     N_genes = data_numpy.shape[1]
@@ -286,21 +303,28 @@ def ae_pipeline(mask, data_numpy, all_genes, all_go, n_epochs=10, batch_size=50,
     return (ae, train_loader, embeddings)
 
 @timeit
-def clf_pipeline(mask, data_numpy, targets, all_genes, all_go, n_epochs=10, batch_size=50, print_loss=100, output_file='model.pth', embed_file='embeddings_clf.csv'):
+def clf_pipeline(mask, data_numpy, targets, all_genes, all_go, n_epochs=10, batch_size=50, print_loss=100, dense=False, output_file='model.pth', embed_file='embeddings_clf.csv'):
     N_genes = data_numpy.shape[1]
     N_classes = targets.max()+1
     size_encoded=100
     
-    clf = GeneClassifier(N_genes, size_encoded, mask, N_classes, all_genes, all_go, activation='tanh')
+    clf = GeneClassifier(N_genes, size_encoded, mask, N_classes, all_genes, all_go, activation='tanh', dense=dense)
     summary(clf, (1,N_genes))
     N = data_numpy.shape[0]
     
     data_numpy = std_normalisation(data_numpy)
     data_tensor = torch.Tensor(data_numpy)
     targets_tensor = torch.Tensor(targets).long()
-    train = torch.utils.data.TensorDataset(data_tensor, targets_tensor)
+    dataset = torch.utils.data.TensorDataset(data_tensor, targets_tensor)
+    
+    train_size = int(0.8*N)
+    val_size = N-train_size
+    
+    train, val = torch.utils.data.random_split(dataset, [train_size, val_size])
+    
     train_loader = torch.utils.data.DataLoader(train, batch_size=batch_size, shuffle=False)
-
+    val_loader = torch.utils.data.DataLoader(val, batch_size=batch_size, shuffle=False)
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     optimizer = optim.Adam(clf.parameters(), lr=1e-4)
@@ -325,7 +349,8 @@ def clf_pipeline(mask, data_numpy, targets, all_genes, all_go, n_epochs=10, batc
             inputs, labels = data
             
             inputs.to(device)
-      
+            inputs.to(device)
+            
             # zero the parameter gradients
             optimizer.zero_grad()
 
@@ -347,6 +372,31 @@ def clf_pipeline(mask, data_numpy, targets, all_genes, all_go, n_epochs=10, batc
                               (epoch + 1, i + 1, running_loss / (i+1), correct / total))
     
     print('Finished Training')
+    
+    print('Computing accuracy on val set')
+    running_loss = 0.0
+    correct = 0.0
+    total = 0 
+
+    for i, data in enumerate(val_loader, 0):
+        inputs, labels = data
+            
+        inputs.to(device)
+        labels.to(device)
+        
+        outputs = clf(inputs)
+        
+        loss = criterion(outputs, labels)
+
+        predict = outputs.argmax(1)
+        
+        correct += (predict == labels).sum().item()
+        total += labels.shape[0]
+        running_loss += loss.item()
+        
+    print('loss: %.5f, accuracy: %.5f' %
+                              (running_loss / (i+1), correct / total))
+
     torch.save(clf, output_file)
     
     embeddings = get_embeddings(train_loader, N, clf, size_encoded=size_encoded)
@@ -354,6 +404,15 @@ def clf_pipeline(mask, data_numpy, targets, all_genes, all_go, n_epochs=10, batc
     np.savetxt(embed_file, embeddings, delimiter=',')
     
     return (clf, train_loader, embeddings)
+
+def get_train_loader(data_numpy, targets, batch_size=50):
+    data_numpy = std_normalisation(data_numpy)
+    data_tensor = torch.Tensor(data_numpy)
+    targets_tensor = torch.Tensor(targets).long()
+    train = torch.utils.data.TensorDataset(data_tensor, targets_tensor)
+    train_loader = torch.utils.data.DataLoader(train, batch_size=batch_size, shuffle=False)
+    
+    return(train, train_loader)
 
 def get_embeddings(train_loader, N, model, size_encoded=100):
     trainiter = iter(train_loader)
