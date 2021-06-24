@@ -242,6 +242,49 @@ class PartialClassifier(nn.Module):
     
 @timeit
 def ae_pipeline(mask, data_numpy, all_genes, all_go, n_epochs=10, batch_size=50, print_loss=100, output_file='model.pth', embed_file='embeddings_ae.csv'):
+    """
+    Training pipeline for the GeneAutoEncoder.
+    Includes:
+        - Normalisation, data split and data loading.
+        - Definition of the model.
+        - Training.
+        - Accuracy and loss computing (at each epoch).
+        - Evaluation of the model on a test set.
+        - Model saving, embeddings saving.
+
+    Parameters
+    ----------
+    mask : bool Tensor
+        A mask defining the genes - go terms connections in the early layers.
+    data_numpy : float numpy ndarray of shape (n_samples, n_features)
+        The data (train and test sets in a single array)
+    all_genes : list of strings 
+        List of gene symbols.
+    all_go : list of strings
+        List of go terms identifiers.
+    n_epochs : int, optional
+        Number of epochs to run. The default is 10.
+    batch_size : int, optional
+        Number of batch to batch the data. The default is 50.
+    dense : int, optional
+        Adding a fully-connected part (100 neurons) on the second layer? The 
+        default is False.
+    output_file : string, optional
+        Filepath for the model output file. The default is 'model_ae.pth'.
+    embed_file : string, optional
+        Filepath for the embeddings output file. The default is 'embeddings_ae.csv'.
+
+    Returns
+    -------
+    clf : GeneClassifier instance.
+        The trained classifier.
+    train_loader : DataLoader instance
+        The data loader containing the batched data.
+    embeddings : float Tensor of size (n_samples, size_embedding)
+        The embeddings.
+
+    """
+
     N_genes = data_numpy.shape[1]
     
     size_encoded=100 
@@ -303,7 +346,51 @@ def ae_pipeline(mask, data_numpy, all_genes, all_go, n_epochs=10, batch_size=50,
     return (ae, train_loader, embeddings)
 
 @timeit
-def clf_pipeline(mask, data_numpy, targets, all_genes, all_go, n_epochs=10, batch_size=50, print_loss=100, dense=False, output_file='model.pth', embed_file='embeddings_clf.csv'):
+def clf_pipeline(mask, data_numpy, targets, all_genes, all_go, n_epochs=10, batch_size=50, dense=False, output_file='model_clf.pth', embed_file='embeddings_clf.csv'):
+    """
+    Training pipeline for the GeneClassifier.
+    Includes:
+        - Normalisation, data split and data loading.
+        - Definition of the model.
+        - Training.
+        - Accuracy and loss computing (at each epoch).
+        - Evaluation of the model on a test set.
+        - Model saving, embeddings saving.
+
+    Parameters
+    ----------
+    mask : bool Tensor
+        A mask defining the genes - go terms connections in the early layers.
+    data_numpy : float numpy ndarray of shape (n_samples, n_features)
+        The data (train and test sets in a single array)
+    targets : int numpy ndarray of shape (n_samples,)
+        The targets for each sample.
+    all_genes : list of strings 
+        List of gene symbols.
+    all_go : list of strings
+        List of go terms identifiers.
+    n_epochs : int, optional
+        Number of epochs to run. The default is 10.
+    batch_size : int, optional
+        Number of batch to batch the data. The default is 50.
+    dense : int, optional
+        Adding a fully-connected part (100 neurons) on the second layer? The 
+        default is False.
+    output_file : string, optional
+        Filepath for the model output file. The default is 'model.pth'.
+    embed_file : string, optional
+        Filepath for the embeddings output file. The default is 'embeddings_clf.csv'.
+
+    Returns
+    -------
+    clf : GeneClassifier instance.
+        The trained classifier.
+    train_loader : DataLoader instance
+        The data loader containing the batched data.
+    embeddings : float Tensor of size (n_samples, size_embedding)
+        The embeddings.
+
+    """
     N_genes = data_numpy.shape[1]
     N_classes = targets.max()+1
     size_encoded=100
@@ -405,16 +492,56 @@ def clf_pipeline(mask, data_numpy, targets, all_genes, all_go, n_epochs=10, batc
     
     return (clf, train_loader, embeddings)
 
-def get_train_loader(data_numpy, targets, batch_size=50):
+def get_train_loader(data_numpy, targets, batch_size=50; shuffle=False):
+    """
+    Given a dataset (samples and targets), returns a pytorch DataLoader.
+
+    Parameters
+    ----------
+    data_numpy : float numpy ndarray of shape (n_samples, n_features)
+        The dataset.
+    targets : int numpy ndarray of shape (n_samples,)
+        Targets for each sample in the dataset.
+    batch_size : int, optional
+        Number of samples in a sigle batch, to batch the data. The default 
+        is 50.
+    shuffle : bool, optional
+        Whether to shuffle or not the samples. The default is False.
+    Returns
+    -------
+    The TensorDataset containing the data, and the batched DataLoader.
+
+    """
     data_numpy = std_normalisation(data_numpy)
     data_tensor = torch.Tensor(data_numpy)
     targets_tensor = torch.Tensor(targets).long()
     train = torch.utils.data.TensorDataset(data_tensor, targets_tensor)
-    train_loader = torch.utils.data.DataLoader(train, batch_size=batch_size, shuffle=False)
+    train_loader = torch.utils.data.DataLoader(train, batch_size=batch_size, shuffle=shuffle)
     
     return(train, train_loader)
 
-def get_embeddings(train_loader, N, model, size_encoded=100):
+def get_embeddings(train_loader, N_samples, model, size_encoded=100):
+    """
+    Given a DataLoader and a GeneClassifier or a GeneAutoEncoder (the 'model'),
+    returns the embeddings in the latent space.
+
+    Parameters
+    ----------
+    train_loader : DataLoader instance
+        The train loader containing the batched samples.
+    N_samples : int
+        Number of samples.
+    model : TYPE
+        The model (either GeneClassifier or GeneAutoEncoder) giving the 
+        embeddings.
+    size_encoded : int, optional
+        The embeddings size. The default is 100.
+
+    Returns
+    -------
+    A numpy ndarray of size (N_samples, size_encoded) containing the embeddings.
+
+    """
     trainiter = iter(train_loader)
     embeddings = np.zeros((N, size_encoded))
     
@@ -427,6 +554,21 @@ def get_embeddings(train_loader, N, model, size_encoded=100):
     return(embeddings)
 
 def std_normalisation(matrix, e=1e-8):
+    """
+    Standard normalisation of a matrix (mean = 0, std = 1) along axis 0.
+
+    Parameters
+    ----------
+    matrix : a (int or float or bool or double) numpy matrix
+        The matrix to normalise (along its axis 0).
+    e : float, optional
+        Constant to avoid division by zero. The default is 1e-8.
+
+    Returns
+    -------
+    The normalised matrix.
+
+    """
     m = np.mean(matrix, axis=0)
     s = np.std(matrix, axis=0)
     r = (matrix - m)/(s+e)
@@ -434,7 +576,29 @@ def std_normalisation(matrix, e=1e-8):
     return(r)
 
 def min_max_normalisation(matrix, a=-1, b=1, e=1e-8):
+    """
+    Min-max normalisation of a matrix (put the min to a, and max to b) along 
+    axis 0.
+
+    Parameters
+    ----------
+    matrix : a (int or float or bool or double) numpy matrix
+        The matrix to normalise (along its axis 0).
+    a : int or float, optional
+        The value to which we want to put a column's min. The default is -1.
+    b : int or float, optional
+        The value to which we want to put a column's max. The default is 1.
+    e : float, optional
+        Constant to avoid division by zero. The default is 1e-8.
+
+    Returns
+    -------
+    The normalised matrix.
+
+    """
+
     M = np.max(matrix, axis=0)
     m = np.min(matrix, axis=0)
     r = (b-a) * (matrix-m) / (M-m+e) + a
+    
     return(r) 

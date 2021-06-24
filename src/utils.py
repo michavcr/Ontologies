@@ -11,7 +11,26 @@ import matplotlib.pyplot as plt
 import umap.umap_ as umap
 import numpy as np
 
-def visualize_UMAP(embeddings,target, w=12, h=6):
+def visualize_UMAP(embeddings, target, w=12, h=6):
+    """
+    Allows to visualize vectors (embeddings from a neural network model) in a 
+    2d-space, using the UMAP algorithm.
+    Parameters
+    ----------
+    embeddings : a numpy ndarray of shape (n_samples, embd_size)
+        The vectors to plot in the 2D graph.
+    target : a numpy ndarray of shape (n_samples,)
+        The targets associated with each embedding vector. Should be integers.
+    w : int or float, optional
+        The weight of the figure. The default is 12.
+    h : int or float, optional
+        The height of the figure. The default is 6.
+
+    Returns
+    -------
+    None.
+
+    """
     reducer = umap.UMAP()
 
     data = reducer.fit_transform(embeddings)
@@ -39,17 +58,51 @@ def visualize_UMAP(embeddings,target, w=12, h=6):
 
     return
 
-def visualize_TSNE(embeddings,target):
+def visualize_TSNE(embeddings, target, w=12, h=6):
+    """
+    Allows to visualize vectors (e.g. embeddings from a neural network model) 
+    in a 2d-space, using the t-SNE algorithm.
+    Parameters
+    ----------
+    embeddings : a numpy ndarray of shape (n_samples, embd_size)
+        The vectors to plot in the 2D graph.
+    target : a numpy ndarray of shape (n_samples,)
+        The targets associated with each embedding vector. Should be integers.
+    w : int or float, optional
+        The weight of the figure. The default is 12.
+    h : int or float, optional
+        The height of the figure. The default is 6.
+
+    Returns
+    -------
+    None.
+
+    """
     tsne = TSNE(n_components=2, init='pca',
                          random_state=0, perplexity=30)
     data = tsne.fit_transform(embeddings)
-    #plt.figure(figsize=(12, 6))
+    
+    plt.figure(figsize=(w, h))
     plt.title("TSNE visualization of the embeddings")
     plt.scatter(data[:,0],data[:,1],c=target)
 
     return
 
 def timeit(method):
+    """
+    Time decorator to print the execution time of a function.
+
+    Use @timeit before your functions.
+    
+    Parameters
+    ----------
+    None.
+    
+    Returns
+    -------
+    None.
+    
+    """
     def timed(*args, **kw):
         ts = time.time()
         result = method(*args, **kw)
@@ -63,7 +116,7 @@ def timeit(method):
         return result
     return timed
 
-def quantile_columns(M, mask, p=0.9):
-    X=np.quantile(M, 0.70, axis=0)
+def quantile_columns(M, mask, p=0.70):
+    X=np.quantile(M, p, axis=0)
     
     return(M[:,X>0], mask[X>0,:])
