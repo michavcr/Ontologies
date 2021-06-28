@@ -9,6 +9,28 @@ from operator import itemgetter
 
 class MaskedLinear(nn.Module):
     def __init__(self, n_input, n_output, mask, has_bias=False, activation='identity'):
+        """
+        A version of nn.Linear with a mask to define expertly the connections.
+
+        Parameters
+        ----------
+        n_input : int
+            Number of inputs.
+        n_output : int
+            Number of outputs.
+        mask : bool pytorch Tensor of size (n_input, n_output)
+            Mask to specify the connections.
+        has_bias : bool, optional
+            Whether a bias is used or not. The default is False.
+        activation : string, optional
+            Activation function to apply, choose between 'sigmoid', 'identity', 
+            or 'tanh'. The default is 'identity'.
+
+        Returns
+        -------
+        None.
+
+        """
         super().__init__()
         self.n_input = n_input
         self.n_output = n_output
@@ -35,6 +57,9 @@ class MaskedLinear(nn.Module):
         return(self.activation(prod))
     
     def update_weight_variance(self, n):
+        """
+        Update weights variance with a recurrence relation.
+        """
         if n <= 1:
             return (self.var_W, self.mean_W)
         
@@ -44,6 +69,9 @@ class MaskedLinear(nn.Module):
         return(self.mean_W, self.var_W)
     
     def initialize_weight_variance(self):
+        """
+        Initialize weights variance. Variance to zero and mean to first values.
+        """
         self.var_W = torch.zeros((self.n_input, self.n_output))
         
         self.mean_W = self.W.detach()
@@ -51,12 +79,20 @@ class MaskedLinear(nn.Module):
         return(self.mean_W, self.var_W)
     
     def get_VIANN(self):
+        """
+        Get the VIANN importance score (Genes importance in relation to 
+        ontology terms).
+        """
         W = self.W.detach()
         VIANN = torch.sum(abs(W*self.var_W), dim=1)
         
         return(VIANN)
     
-    def get_VTANN(self):
+    def get_VIANN_2(self):
+        """
+        Same as VIANN but with ontology terms importance in relation to genes.
+        """
+
         W = self.W.detach()
         VIANN = torch.sum(abs(W*self.var_W), dim=0)
         
@@ -64,6 +100,33 @@ class MaskedLinear(nn.Module):
         
 class GeneAutoEncoder(nn.Module):
     def __init__(self, n_genes, n_dense, mask, all_genes, all_go, activation='tanh'):
+        """
+        Autoencoder with expertly defined connections on the top and the bottom
+        of the network. The first/last layer represent genes while the second/
+        penultimate layers represent go terms (biological processes, molecular
+        functions...)
+
+        Parameters
+        ----------
+        n_genes : int
+            Number of genes as input of the neural network.
+        n_dense : int
+            Number of neurons on the latent layer.
+        mask : bool pytorch Tensor
+            Mask to use at the top and the bottom of the network.
+        all_genes : list of strings
+            List of gene names.
+        all_go : list of strings
+            List of go term ids.
+        activation : string, optional
+            Activation function to apply, choose between 'sigmoid', 'identity', 
+            or 'tanh'. The default is 'identity'.
+
+        Returns
+        -------
+        None.
+
+        """
         super().__init__()
         self.all_genes = all_genes
         self.all_go = all_go
@@ -87,6 +150,8 @@ class GeneAutoEncoder(nn.Module):
         return(decoded)
     
     def get_terms(self, gene_id):
+        """Given a gene id, get indices of go terms which are connected to this 
+        gene."""
         term_idx = torch.nonzero(self.mask[gene_id, :], as_tuple=True)[0]
         
         res = [self.all_go[t] for t in term_idx]
@@ -94,6 +159,9 @@ class GeneAutoEncoder(nn.Module):
         return(res)
         
     def get_genes(self, term_id):
+        """Given a go term id, get indices of genes which are connected to 
+        this go term."""
+
         gene_idx = torch.nonzero(self.mask[:, term_id], as_tuple=True)[0]
         
         res = [self.all_genes[g] for g in gene_idx]
@@ -101,6 +169,9 @@ class GeneAutoEncoder(nn.Module):
         return(res)
     
     def get_sorted_genes(self, term_id):
+        """Given a go term id, get indices of genes which are connected to 
+        this go term, sorted by descending weights."""
+
         gene_idx = torch.nonzero(self.mask[:, term_id], as_tuple=True)[0]
         
         W = self.encoder[0].W.detach()
@@ -110,6 +181,9 @@ class GeneAutoEncoder(nn.Module):
         return(sorted(res, key=itemgetter(1), reverse=True))
     
     def get_sorted_terms(self, gene_id):
+        """Given a gene id, get indices of go terms which are connected to this 
+        gene, sorted by descending weights."""
+
         term_idx = torch.nonzero(self.mask[gene_id, :], as_tuple=True)[0]
         
         W = self.encoder[0].W.detach()
@@ -120,6 +194,28 @@ class GeneAutoEncoder(nn.Module):
     
 class Baseline(nn.Module):
     def __init__(self, n_genes, n_dense, all_genes, all_go, activation='tanh'):
+        """
+        Fully connected autoencoder as a Baseline.
+
+        Parameters
+        ----------
+        n_genes : int
+            Number of genes as input of the neural network.
+        n_dense : int
+            Number of neurons on the latent layer.
+        all_genes : list of strings
+            List of gene names.
+        all_go : list of strings
+            List of go term ids.
+        activation : string, optional
+            Activation function to apply, choose between 'sigmoid', 'identity', 
+            or 'tanh'. The default is 'identity'.
+        Returns
+        -------
+        None.
+
+        """
+
         super().__init__()
         
         self.N0 = n_genes
@@ -139,6 +235,37 @@ class Baseline(nn.Module):
         
 class GeneClassifier(nn.Module):
     def __init__(self, n_genes, n_dense, mask, n_classes, all_genes, all_go, activation='tanh', dense=False):
+        """
+        Classifier with expertly defined connections on the input layer
+        of the network. The first layer represent genes while the second
+        layer represent gene ontology terms (biological processes, molecular
+        functions...)
+
+        Parameters
+        ----------
+        n_genes : int
+            Number of genes as input of the neural network.
+        n_dense : int
+            Number of neurons on the latent layer.
+        mask : bool pytorch Tensor
+            Mask to use at the top and the bottom of the network.
+        n_classes : int
+            Number of classes (define the number of neurons of the last layer).
+        all_genes : list of strings
+            List of gene names.
+        all_go : list of strings
+            List of go term ids.
+        activation : string, optional
+            Activation function to apply, choose between 'sigmoid', 'identity', 
+            or 'tanh'. The default is 'identity'.
+        dense : bool, optional
+            Whether to add a fully connected part on the latent layer or not.
+        Returns
+        -------
+        None.
+
+        """
+
         super().__init__()
         self.all_genes = all_genes
         self.all_go = all_go
@@ -174,6 +301,9 @@ class GeneClassifier(nn.Module):
         return(res)
     
     def get_terms(self, gene_id):
+        """Given a gene id, get indices of go terms which are connected to this 
+        gene."""
+
         term_idx = torch.nonzero(self.mask[gene_id, :], as_tuple=True)[0]
         
         res = [self.all_go[t] for t in term_idx]
@@ -181,6 +311,9 @@ class GeneClassifier(nn.Module):
         return(res)
     
     def get_genes(self, term_id):
+        """Given a go term id, get indices of genes which are connected to 
+        this go term."""
+
         gene_idx = torch.nonzero(self.mask[:, term_id], as_tuple=True)[0]
         
         res = [self.all_genes[g] for g in gene_idx]
@@ -188,6 +321,9 @@ class GeneClassifier(nn.Module):
         return(res)
     
     def get_sorted_genes(self, term_id):
+        """Given a go term id, get indices of genes which are connected to 
+        this go term, sorted by descending weights."""
+
         gene_idx = torch.nonzero(self.mask[:, term_id], as_tuple=True)[0]
         
         W = self.encoder[0].W.detach()
@@ -197,6 +333,9 @@ class GeneClassifier(nn.Module):
         return(sorted(res, key=itemgetter(1), reverse=True))
     
     def get_sorted_terms(self, gene_id):
+        """Given a gene id, get indices of go terms which are connected to this 
+        gene, sorted by descending weights."""
+
         term_idx = torch.nonzero(self.mask[gene_id, :], as_tuple=True)[0]
         
         W = self.encoder[0].W.detach()
@@ -204,13 +343,20 @@ class GeneClassifier(nn.Module):
         res = [(self.all_go[t], W[gene_id, t].item()) for t in term_idx]
         
         return(sorted(res, key=itemgetter(1), reverse=True))
+    
     def get_current_score(self):
+        """
+        Get current score W2*W3.
+        """
         W2 = torch.transpose(next(self.encoder[1].parameters()), 0, 1)
         W3 = torch.transpose(next(self.clf[0].parameters()), 0, 1)
 
         return(torch.matmul(W2, W3).detach())
     
     def update_score_variance(self, n):
+        """
+        Update score (W2*W3) variance.
+        """
         if n <= 1:
             return (self.mean_S, self.var_S)
         
@@ -222,6 +368,10 @@ class GeneClassifier(nn.Module):
         return(self.mean_S, self.var_S)
     
     def initialize_score_variance(self):
+        """
+        Initialize score (W2*W3) variance.
+
+        """
         self.var_S = torch.zeros((self.N1, self.Nc))
         
         self.mean_S = self.get_current_score()
@@ -229,6 +379,10 @@ class GeneClassifier(nn.Module):
         return(self.mean_S, self.var_S)
 
 class PartialClassifier(nn.Module):
+    """
+    Classifier architecture without the first layer (the first hidden layer
+    becomes the input layer).
+    """
     def __init__(self, clf):
         super().__init__()
 
