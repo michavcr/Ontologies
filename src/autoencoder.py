@@ -438,12 +438,13 @@ def ae_pipeline(mask, data_numpy, all_genes, all_go, n_epochs=10, batch_size=50,
         The embeddings.
 
     """
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     N_genes = data_numpy.shape[1]
     
     size_encoded=100 
     
-    ae = GeneAutoEncoder(N_genes, size_encoded, mask, all_genes, all_go, activation='tanh')
+    ae = GeneAutoEncoder(N_genes, size_encoded, mask, all_genes, all_go, activation='tanh').to(device)
     summary(ae, (1,N_genes))
     
     N = data_numpy.shape[0]
@@ -452,8 +453,6 @@ def ae_pipeline(mask, data_numpy, all_genes, all_go, n_epochs=10, batch_size=50,
     data_tensor = torch.Tensor(data_numpy)
     train = torch.utils.data.TensorDataset(data_tensor, data_tensor)
     train_loader = torch.utils.data.DataLoader(train, batch_size=batch_size, shuffle=False)
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     optimizer = optim.Adam(ae.parameters(), lr=1e-3)
 
@@ -545,11 +544,13 @@ def clf_pipeline(mask, data_numpy, targets, all_genes, all_go, n_epochs=10, batc
         The embeddings.
 
     """
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     N_genes = data_numpy.shape[1]
     N_classes = targets.max()+1
     size_encoded=100
     
-    clf = GeneClassifier(N_genes, size_encoded, mask, N_classes, all_genes, all_go, activation='tanh', dense=dense)
+    clf = GeneClassifier(N_genes, size_encoded, mask, N_classes, all_genes, all_go, activation='tanh', dense=dense).to(device)
     summary(clf, (1,N_genes))
     N = data_numpy.shape[0]
     
@@ -566,8 +567,6 @@ def clf_pipeline(mask, data_numpy, targets, all_genes, all_go, n_epochs=10, batc
     train_loader = torch.utils.data.DataLoader(train, batch_size=batch_size, shuffle=False)
     val_loader = torch.utils.data.DataLoader(val, batch_size=batch_size, shuffle=False)
     
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
     optimizer = optim.Adam(clf.parameters(), lr=1e-4)
 
     # cross-entropy error loss
