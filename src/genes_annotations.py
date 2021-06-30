@@ -27,7 +27,7 @@ def read_h5(filename):
 
 def get_all_genes(h5):
     """
-    Listing the genes involved in h5 object.
+    Listing the genes involved in h5 TISCH object.
 
     Parameters
     ----------

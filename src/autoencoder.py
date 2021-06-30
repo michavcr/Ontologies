@@ -82,6 +82,7 @@ class MaskedLinear(nn.Module):
         """
         Get the VIANN importance score (Genes importance in relation to 
         ontology terms).
+        VIANN(g) = Sum_t |w_{g,t}|*(Var(w)_{g,t})
         """
         W = self.W.detach()
         VIANN = torch.sum(abs(W*self.var_W), dim=1)
@@ -91,6 +92,7 @@ class MaskedLinear(nn.Module):
     def get_VIANN_2(self):
         """
         Same as VIANN but with ontology terms importance in relation to genes.
+        VIANN2(t) = Sum_g |w_{g,t}|*(Var(w)_{g,t})
         """
 
         W = self.W.detach()
@@ -459,12 +461,15 @@ def ae_pipeline(mask, data_numpy, all_genes, all_go, n_epochs=10, batch_size=50,
     # mean-squared error loss
     criterion = nn.MSELoss()
     
+    # Initialize MaskedLinear weights variance
     _,_ = ae.encoder[0].initialize_weight_variance()
     
     for epoch in range(n_epochs):  # loop over the dataset multiple times
 
         running_loss = 0.0
         
+        
+        # Update MaskedLinear weights variance
         _,_ = ae.encoder[0].update_weight_variance(epoch+1)
         
         for i, data in enumerate(train_loader, 0):
@@ -645,7 +650,7 @@ def clf_pipeline(mask, data_numpy, targets, all_genes, all_go, n_epochs=10, batc
     
     return (clf, train_loader, embeddings)
 
-def get_train_loader(data_numpy, targets, batch_size=50; shuffle=False):
+def get_train_loader(data_numpy, targets, batch_size=50, shuffle=False):
     """
     Given a dataset (samples and targets), returns a pytorch DataLoader.
 
@@ -696,7 +701,7 @@ def get_embeddings(train_loader, N_samples, model, size_encoded=100):
 
     """
     trainiter = iter(train_loader)
-    embeddings = np.zeros((N, size_encoded))
+    embeddings = np.zeros((N_samples, size_encoded))
     
     for i, data in enumerate(trainiter):
         inputs, _ = data
